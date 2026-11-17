@@ -1,0 +1,18 @@
+# REAPER automatic backups / peak caches / undo history
+Backups/
+*.rpp-bak
+*.reapeaks
+*.RPP-UNDO
+# recorded media goes here when recording; large and regenerable decisions are the user's
+Media/
+
+# test scratch output
+tests/tmp/
+tests/last-run.log
+
+# OS / editors
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+node_modules/
