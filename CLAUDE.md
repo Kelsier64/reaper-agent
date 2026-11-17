@@ -48,6 +48,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\analyze.ps1 renders\x.
 - `.rpp` 設成不自動 merge：同一首曲子同時只能有一個人或一個 agent 改。曲子的變更要 commit 在 main 上（REAPER 開的就是 main checkout 裡的那份）。
 - **worktree 的限制**：REAPER 載入的是 **main checkout** 的 `bridge/`（載入器寫死了路徑）。在 worktree 裡改 `bridge/` 不會影響正在跑的 bridge，在那裡跑 `tests\run-tests.ps1` 測到的也是 main 的版本（hot reload 測試還會失敗）。所以要改 bridge/helpers，請在 main checkout 改、測、commit；`tools/`、`mcp/`、`tests/`、文件可以在 worktree 改，但只有在 main 上合併後才算測過。
 - 不要 commit 使用者沒同意的大型音檔或 Media。
+- 在 PowerShell 裡，commit 訊息先寫成 UTF-8 檔案再 `git commit -F <檔案>`（here-string 不能當 `-F -` 的 stdin）。
 
 ## 已知的坑（細節見 ISSUES.md）
 - FX 包絡線存的是 native 值：用 `H.automate_display`，不要用 normalized。
