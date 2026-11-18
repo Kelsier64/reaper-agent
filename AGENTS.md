@@ -37,10 +37,9 @@ node tools/reaper.mjs exec q.lua --readonly
 node tools/reaper.mjs render <曲名>_vN --project <曲名>
 node tools/reaper.mjs analyze renders/<曲名>_vN.wav
 node tools/reaper.mjs listen --project <曲名> --from 10 --to 18 --tracks "Melody"
-node tools/reaper.mjs page --open
 ```
 REAPER 可能同時開著好幾首曲子（例如其他 session 正在做的遊戲音樂），**修改指令一律加 `--project <曲名>`**。
-render 後的交付方式（直接傳 WAV、試聽頁、`listen`）照 `skills/reaper-bridge/SKILL.md` 的「交付試聽」。
+render 後的交付方式（直接傳 WAV、`listen`）照 `skills/reaper-bridge/SKILL.md` 的「交付試聽」。使用者不需要試聽網頁，不要做。
 REAPER 載入的是這個 repo 的 `bridge/`（`status.root`）。不要在這台機器上跑已安裝 skill 的 `install --force`：
 那會讓 REAPER 改用 skill 裡的舊版 bridge。
 

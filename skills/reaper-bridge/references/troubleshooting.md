@@ -24,10 +24,7 @@
 
 ## 常見狀況
 - **`require_project: active project is X, expected Y`**：使用者在 REAPER 切到了別的專案分頁（或你給錯名稱）。
-  請使用者切回 Y 那個分頁再繼續；不要自己切分頁，也不要拿掉 `--project` 硬做。
-- **試聽頁打不開或沒有聲音**：試聽頁是 `renders/listen.html`，跟 WAV 放在同一個資料夾，用相對路徑播放，所以整個資料夾要一起移動。
-  `R page --open` 會用預設瀏覽器打開它。
-- **`blocked`**：請使用者關掉 `dialogs` 裡列的視窗。不要 restart，也不要 stop：對話框關掉之後 REAPER 會處理排隊的動作，可能多開一個 REAPER。
+  請使用者切回 Y 那個分頁再繼續；不要自己切分頁，也不要拿掉 `--project` 硬做。- **`blocked`**：請使用者關掉 `dialogs` 裡列的視窗。不要 restart，也不要 stop：對話框關掉之後 REAPER 會處理排隊的動作，可能多開一個 REAPER。
 - **exit 3 timeout**：請求太久（render）或中途跳出對話框。先 `R status` 看看。render 本身最多給 600 秒。
 - **exit 5 lock busy**：另一個請求佔用超過 300 秒。`R status` 看 `lock` 是誰；持有的程序已經不在時，下一個請求會自動接手。
 - **`helpers_error`**：bridge 載入 helpers 失敗，正在用上一版。這是 bridge 本身的問題，告訴使用者。

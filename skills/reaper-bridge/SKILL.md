@@ -1,6 +1,6 @@
 ---
 name: reaper-bridge
-description: 透過 Lua bridge 操作使用者電腦上正在執行的 REAPER（DAW）：查狀態、讀取專案（軌道、MIDI、FX、automation、混音）、送 Lua（ReaScript + H helpers）來編曲或修改、存檔、render 成 WAV、分析，並把結果交給使用者試聽（直接傳 WAV、試聽頁、在 REAPER 裡設好播放範圍）。只要使用者提到 REAPER、DAW、編曲、軌道、MIDI、音色、混音、render、遊戲音樂/音效，或想讓你直接在 REAPER 裡做事，就用這個 skill，即使他沒有說「bridge」。Use whenever the user wants you to look at, change, render or play back their REAPER project.
+description: 透過 Lua bridge 操作使用者電腦上正在執行的 REAPER（DAW）：查狀態、讀取專案（軌道、MIDI、FX、automation、混音）、送 Lua（ReaScript + H helpers）來編曲或修改、存檔、render 成 WAV、分析，並把結果交給使用者試聽（直接傳 WAV、在 REAPER 裡設好播放範圍）。只要使用者提到 REAPER、DAW、編曲、軌道、MIDI、音色、混音、render、遊戲音樂/音效，或想讓你直接在 REAPER 裡做事，就用這個 skill，即使他沒有說「bridge」。Use whenever the user wants you to look at, change, render or play back their REAPER project.
 ---
 
 # 操作 REAPER bridge
@@ -24,9 +24,8 @@ description: 透過 Lua bridge 操作使用者電腦上正在執行的 REAPER（
 | `R exec 檔案.lua --project 曲名 --label "做了什麼"` | 執行 Lua。一次請求 = 一個 undo 點 `Claude: <label>` |
 | `R exec 檔案.lua --readonly` | 查詢，不建 undo 點 |
 | `... --arg 名稱=值`（可重複） | 傳參數給 Lua：程式裡用 `ARGS.名稱`（像數字的會變成數字）。同一支腳本換數值不用多寫一個檔 |
-| `R render 名稱 [--start-bar N --end-bar N --tail 秒 --srate 48000 --mono]` | master → `<專案資料夾>/renders/名稱.wav`，取代舊檔，並更新同資料夾的試聽頁 |
+| `R render 名稱 [--start-bar N --end-bar N --tail 秒 --srate 48000 --mono]` | master → `<專案資料夾>/renders/名稱.wav`，取代舊檔 |
 | `R listen [--from N --to N --tracks "A,B" --play --no-loop]` | 在 REAPER 裡設好循環範圍、游標、畫面縮放、選取軌道，使用者按空白鍵就能聽 |
-| `R page [--open]` | 產生/開啟試聽頁 `renders/listen.html`（每個 WAV 一個播放器，加上說明） |
 | `R analyze 檔案.wav` | 峰值/RMS、頻段、頻譜峰、時間軸（怎麼讀：`reaper-sound-design` skill） |
 | 任何指令加 `--out 檔案` | 完整輸出寫到檔案，只印摘要。大的 dump 用這個，再讀需要的部分 |
 
@@ -56,22 +55,19 @@ agent 不能自己開新專案或另存新檔：這兩個動作都會跳出對�
 3. `R status`，確認 `status.project` 是新檔。接著 `H.set_tempo(bpm, 拍號)`、建軌，照一般流程進行。
 
 ## 交付試聽
-使用者要的是「打開就能聽」，不是一串路徑。每次 render 之後：
-1. 在 WAV 旁邊寫一個同名的 `.txt`（例如 `renders/曲名_v3.txt`），兩三行就好：這版改了什麼、請注意聽哪裡（用 `m:ss`）。
-   試聽頁會把它顯示在播放器下方。
-2. `R render` 已經自動更新試聽頁。這個 session 第一次交付時加跑 `R page --open` 打開它；之後只要請使用者重新整理。
-3. 如果你有把檔案直接傳給使用者的工具（例如 Claude 桌面版的 `SendUserFile`），**直接把 WAV 傳過去**，
+使用者要的是「打開就能聽」，不是一串路徑。不要另外做網頁或試聽頁。每次 render 之後：
+1. 如果你有把檔案直接傳給使用者的工具（例如 Claude 桌面版的 `SendUserFile`），**直接把 WAV 傳過去**，
    多個候選放在同一次傳送，附一行說明。沒有這種工具時，給 WAV 的完整路徑連結。
-4. 跑 `R listen --project <曲名> --from <小節> --to <小節> --tracks "<你改的軌>"`，
+2. 跑 `R listen --project <曲名> --from <小節> --to <小節> --tracks "<你改的軌>"`，
    讓使用者想在 REAPER 裡聽（或 solo 某軌）時，按空白鍵就從重點段落開始循環。除非使用者要求，不要加 `--play`：突然出聲很嚇人。
-5. 回覆用這個格式（表格 + 一個具體問題）：
+3. 回覆用這個格式（表格 + 一個具體問題）：
 
    | 版本 | 檔案 | 改了什麼 | 注意聽 |
    |---|---|---|---|
    | v3 | [曲名_v3.wav](完整路徑) | 主旋律換成窄脈波 | 0:05 第一句的音色、0:20 進入 B 段 |
 
-   接著問一個好回答的問題，例如「A 和 B 哪個比較像你要的？」「0:20 的喇叭感是太重還是剛好？」，
-   並附上試聽頁連結；REAPER 裡已經設好從第幾小節循環也要說。
+   接著問一個好回答的問題，例如「A 和 B 哪個比較像你要的？」「0:20 的喇叭感是太重還是剛好？」；
+   REAPER 裡已經設好從第幾小節循環也要說。
 
 ## 寫 Lua 的重點
 環境裡有 `reaper`（完整 ReaScript API，別名 `r`）、`H`（helpers）、`log(...)`，加 `--arg` 時還有 `ARGS`。

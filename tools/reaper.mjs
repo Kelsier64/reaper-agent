@@ -13,23 +13,21 @@
 //   node tools/reaper.mjs exec - --label x < code.lua     (stdin; saved under <project>/cmds/cli/)
 //   node tools/reaper.mjs dump [--notes] [--sends] [--project Name]
 //   node tools/reaper.mjs render <name> [--start-bar N] [--end-bar N] [--tail S] [--srate 48000] [--mono] [--project Name]
-//        (also refreshes the listening page next to the WAV)
 //   node tools/reaper.mjs listen [--from N] [--to N] [--tracks "A,B"] [--play] [--no-loop] [--project Name]
 //        (loop + cursor + zoom + track selection in REAPER, so the user can press play)
-//   node tools/reaper.mjs page [dir] [--open]   listening page renders/listen.html (players + notes)
 //   node tools/reaper.mjs analyze <file.wav>
 // Global: --out <file> writes the full output there and prints only {"ok","out","bytes"}
 //         (use it for big dumps so they do not flood your context).
 // Prints the JSON reply of the bridge. Exit codes are those of send.ps1 / bridge.ps1
 // (0 ok, 1 usage, 2 bridge not running/blocked, 3 timeout, 4 request error, 5 lock busy,
 //  6 install refused: REAPER already uses another bridge).
-import { execFile, spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve, isAbsolute, basename } from 'node:path';
+import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 const HERE = dirname(fileURLToPath(import.meta.url));   // tools/ (repo) or scripts/ (skill)
 // written by tools/build-skills.mjs into an installed skill; absent in the dev repo
 const BUILD_FILE = join(HERE, '..', 'VERSION.json');
@@ -43,7 +41,6 @@ const USAGE = `usage: node <dir>/reaper.mjs <command> [options]
   dump [--notes] [--sends] [--project Name]
   render <name> [--start-bar N] [--end-bar N] [--tail sec] [--srate Hz] [--mono] [--project Name]
   listen [--from N] [--to N] [--tracks "A,B"] [--play] [--no-loop] [--project Name]
-  page [dir] [--open]
   analyze <file.wav>
   global: --out <file>   write the output to a file, print a short summary`;
 
@@ -105,7 +102,7 @@ export function luaStr(s) { // Lua string literal (JSON's \uXXXX is not valid Lu
     (c) => '\\' + c.charCodeAt(0).toString().padStart(3, '0')) + '"';
 }
 
-const FLAGS = new Set(['readonly', 'notes', 'sends', 'force', 'mono', 'play', 'noLoop', 'open']);
+const FLAGS = new Set(['readonly', 'notes', 'sends', 'force', 'mono', 'play', 'noLoop']);
 export function parseArgs(argv) {
   const pos = []; const opt = { arg: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -135,78 +132,6 @@ export function prelude(opt) {
     parts.push(`local ARGS = { ${kv.join(', ')} };`);
   }
   return parts.join(' ');
-}
-
-// ---- listening page
-function wavInfo(p) {
-  try {
-    const fd = openSync(p, 'r'); const b = Buffer.alloc(4096); const n = readSync(fd, b, 0, 4096, 0); closeSync(fd);
-    if (b.toString('ascii', 0, 4) !== 'RIFF') return null;
-    let o = 12, ch, rate, bits, data;
-    while (o + 8 <= n) {
-      const id = b.toString('ascii', o, o + 4), sz = b.readUInt32LE(o + 4);
-      if (id === 'fmt ') { ch = b.readUInt16LE(o + 10); rate = b.readUInt32LE(o + 12); bits = b.readUInt16LE(o + 22); }
-      if (id === 'data') { data = sz; break; }
-      o += 8 + sz + (sz & 1);
-    }
-    if (!rate || !data) return null;
-    return { ch, rate, bits, seconds: data / (rate * ch * (bits / 8)) };
-  } catch { return null; }
-}
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
-
-// renders/listen.html: every WAV (newest first) with a player and its <name>.txt note
-export function writePage(dir) {
-  const wavs = readdirSync(dir).filter((f) => /\.wav$/i.test(f))
-    .map((f) => ({ f, t: statSync(join(dir, f)).mtimeMs, info: wavInfo(join(dir, f)) }))
-    .sort((a, b) => b.t - a.t);
-  const items = wavs.map((w, i) => {
-    const name = w.f.replace(/\.wav$/i, '');
-    const notePath = join(dir, name + '.txt');
-    const note = existsSync(notePath) ? readFileSync(notePath, 'utf8').trim() : '';
-    const wi = w.info;
-    const fmt = wi ? `${mmss(wi.seconds)} · ${wi.rate / 1000} kHz · ${wi.ch === 1 ? 'mono' : wi.ch + ' ch'} · ${wi.bits}-bit` : '';
-    const when = new Date(w.t).toLocaleString('zh-TW', { hour12: false });
-    return `<li class="item${i === 0 ? ' newest' : ''}">
-  <div class="head"><span class="name">${esc(name)}</span>${i === 0 ? '<span class="badge">最新</span>' : ''}</div>
-  <div class="meta">${esc(when)}${fmt ? ' · ' + esc(fmt) : ''}</div>
-  <audio controls preload="metadata" src="${encodeURIComponent(w.f)}"></audio>
-  ${note ? `<div class="note">${esc(note)}</div>` : ''}
-</li>`;
-  }).join('\n');
-  const title = basename(dirname(resolve(dir))) || 'renders';
-  const html = `<!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>試聽：${esc(title)}</title>
-<style>
-:root { --bg:#f7f6f3; --card:#fff; --fg:#1d1d1f; --mute:#6b6b70; --line:#e3e1dc; --accent:#c2410c; }
-@media (prefers-color-scheme: dark) { :root { --bg:#161617; --card:#202022; --fg:#ececee; --mute:#9a9aa0; --line:#323236; --accent:#fb923c; } }
-body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 system-ui, "Microsoft JhengHei", sans-serif; }
-main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
-h1 { font-size:20px; margin:0 0 4px; } .sub { color:var(--mute); margin:0 0 20px; font-size:13px; }
-ul { list-style:none; padding:0; margin:0; display:grid; gap:12px; }
-.item { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
-.item.newest { border-color:var(--accent); }
-.head { display:flex; gap:8px; align-items:center; } .name { font-weight:600; word-break:break-all; }
-.badge { font-size:12px; color:var(--accent); border:1px solid var(--accent); border-radius:99px; padding:0 8px; }
-.meta { color:var(--mute); font-size:13px; margin:2px 0 8px; }
-audio { width:100%; } .note { white-space:pre-wrap; margin-top:8px; font-size:14px; }
-</style></head><body><main>
-<h1>試聽：${esc(title)}</h1>
-<p class="sub">最新的在最上面。播放一個會自動暫停其他的，方便 A/B 比較。每次 render 後會自動更新，重新整理即可。</p>
-<ul>
-${items || '<li class="item">還沒有 render 出來的檔案。</li>'}
-</ul></main>
-<script>
-document.addEventListener('play', (e) => { document.querySelectorAll('audio').forEach((a) => { if (a !== e.target) a.pause(); }); }, true);
-</script></body></html>`;
-  const out = join(dir, 'listen.html');
-  writeFileSync(out, html, 'utf8');
-  return { page: out, files: wavs.length, newest: wavs[0]?.f ?? null };
-}
-function openFile(p) {
-  try { spawn('explorer.exe', [p], { detached: true, stdio: 'ignore' }).unref(); return true; } catch { return false; }
 }
 
 function readStdin() {
@@ -281,14 +206,6 @@ export async function run(argv) {
         if (opt.noLoop) o.push('loop = false');
         return sendFile(tmpCode(`${prelude(opt)} return H.listen({ ${o.join(', ')} })`), { label: 'listen', readonly: true });
       }
-      case 'page': {
-        const pdir = reaperProjectDir();
-        const dir = pos[0] ? resolve(process.cwd(), pos[0]) : (pdir ? join(pdir, 'renders') : null);
-        if (!dir || !existsSync(dir)) return fail(`no renders folder: ${dir}`);
-        const pg = writePage(dir);
-        const opened = opt.open ? openFile(pg.page) : false;
-        return { code: 0, out: JSON.stringify({ ok: true, ...pg, opened }) };
-      }
       case 'render': {
         const name = pos[0];
         if (!name || !/^[\w.-]+$/.test(name)) return fail('render needs a name: [A-Za-z0-9-_.]');
@@ -298,14 +215,8 @@ export async function run(argv) {
         if (opt.tail !== undefined) o.push(`tail = ${num(opt.tail, '--tail')}`);
         if (opt.srate !== undefined) o.push(`srate = ${num(opt.srate, '--srate')}`);
         if (opt.mono) o.push('channels = 1');
-        const r = await sendFile(tmpCode(`${prelude(opt)} return H.render(${luaStr(name)}, { ${o.join(', ')} })`),
+        return sendFile(tmpCode(`${prelude(opt)} return H.render(${luaStr(name)}, { ${o.join(', ')} })`),
           { label: `render ${name}`, readonly: true, timeout: 600 });
-        // keep the listening page next to the WAV up to date
-        try {
-          const path = JSON.parse(r.out).result?.path;
-          if (r.code === 0 && path) r.page = writePage(dirname(path)).page;
-        } catch { }
-        return r;
       }
       case 'analyze': {
         if (!pos[0]) return fail('analyze needs a .wav path');
@@ -334,7 +245,6 @@ if (isMain) {
   if (r.err) text += `\n[stderr] ${r.err}`;
   if (r.killed) text += '\n[killed: timeout]';
   if (r.saved) text += `\n[code saved to ${r.saved}]`;
-  if (r.page) text += `\n[listening page: ${r.page}]`;
   if (outFile) {
     const p = resolve(process.cwd(), outFile);
     mkdirSync(dirname(p), { recursive: true });

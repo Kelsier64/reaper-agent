@@ -1,6 +1,6 @@
 // tests/test_cli.mjs - run tools/reaper.mjs as a subprocess, like an agent would (needs a running bridge)
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, rmSync, utimesSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, luaStr } from '../tools/reaper.mjs';
@@ -104,26 +104,6 @@ try {
   // listen: argument errors are caught before REAPER's view is touched
   const lb = cli(['listen', '--from', '4', '--to', '2']);
   check('listen validates the range', lb.code === 4 && lb.out.includes('to_bar must be after'), lb.out.slice(0, 300));
-
-  // page: players, notes, format line for a folder of WAVs
-  const pdir = join(TMP, 'page_test');
-  rmSync(pdir, { recursive: true, force: true }); mkdirSync(pdir, { recursive: true });
-  const wav = (ch, rate) => {
-    const n = rate / 10, ba = 2 * ch, b = Buffer.alloc(44 + n * ba);
-    b.write('RIFF', 0); b.writeUInt32LE(36 + n * ba, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20);
-    b.writeUInt16LE(ch, 22); b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate * ba, 28); b.writeUInt16LE(ba, 32); b.writeUInt16LE(16, 34);
-    b.write('data', 36); b.writeUInt32LE(n * ba, 40); return b;
-  };
-  writeFileSync(join(pdir, 'song_v1.wav'), wav(2, 44100));
-  writeFileSync(join(pdir, 'song_v2 &A.wav'), wav(1, 48000));
-  writeFileSync(join(pdir, 'song_v2 &A.txt'), '注意聽 0:05 的 <音色>', 'utf8');
-  const old = new Date(Date.now() - 3600e3); utimesSync(join(pdir, 'song_v1.wav'), old, old);
-  const pg = cli(['page', pdir]);
-  const html = existsSync(join(pdir, 'listen.html')) ? readFileSync(join(pdir, 'listen.html'), 'utf8') : '';
-  check('page: one player per WAV', pg.code === 0 && pg.json?.files === 2 && (html.match(/<audio /g) || []).length === 2, pg.out);
-  check('page: newest first, note shown and escaped', html.indexOf('song_v2 &amp;A') < html.indexOf('song_v1') && html.includes('注意聽 0:05 的 &lt;音色&gt;'), html.slice(0, 200));
-  check('page: format line (48 kHz mono)', html.includes('48 kHz · mono · 16-bit'), '');
-  check('page: src is URL-encoded', html.includes('src="song_v2%20%26A.wav"'), '');
 } catch (e) {
   check('no exceptions', false, e.stack || e);
 }

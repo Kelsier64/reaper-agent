@@ -19,6 +19,3 @@ node_modules/
 
 # built portable skills (node tools/build-skills.mjs)
 dist/
-
-# generated listening page (node tools/reaper.mjs page)
-renders/listen.html

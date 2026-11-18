@@ -16,7 +16,7 @@
   7–8. 候選沒對齊響度、遠近效果的 send 位置 → 寫進 reaper-sound-design。
   9. dump 欄位沒文件、沒有 master → API.md 加 dump 欄位，dump 加 `master`。
   10. `H.params` 只能子字串、analyze 對單聲道印 -150 dB → `^` 開頭比對、analyze 標 `mono`。
-- 同時新增試聽交付：`listen`（REAPER 裡設好循環範圍）、試聽頁 `renders/listen.html`、WAV 旁的 `.txt` 說明、有傳檔工具時直接傳 WAV。
+- 同時新增試聽交付：`listen`（REAPER 裡設好循環範圍）、有傳檔工具時直接傳 WAV。一度加過試聽網頁 `renders/listen.html`，使用者說不需要，已經拿掉（CLI 1.3.0）。
   用 `claude -p` 在暫時的 TrialSong 分頁實測過整個流程，沒有被權限檢查擋住。
 
 ### [FIXED] `H.render` 會蓋掉專案自己的 render 設定，並讓專案變成未存檔
