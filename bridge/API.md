@@ -53,7 +53,7 @@ Conventions
 | `H.installed_fx(filter?)` | names of installed plugins, e.g. `H.installed_fx("Surge")` |
 | `H.fx(track, name, {new})` → index | adds if not on the track (`new=true`: always add) |
 | `H.fx_list(track)`, `H.clear_fx(track)` | |
-| `H.params(track, fx, filter?)` | `{ {i, name, v(normalized), fmt(display)}, ... }` |
+| `H.params(track, fx, filter?)` | `{ {i, name, v(normalized), fmt(display)}, ... }`; filter is a case-insensitive substring, a leading `^` matches the start of the name (`"^A Osc"`) |
 | **`H.set(track, fx, param, value)`** | number → by **display value** (`800` Hz, `-6` dB, `1500` ms; `-200` reaches `-inf`); string → by **choice label** (`"LP 24 dB"`, `"On"`). Returns the display string, so check it. |
 | `H.param_choices(track, fx, param)` | labels of an enum param |
 | `H.set_param(track, fx, param, normalized)` | raw 0..1 |
@@ -64,7 +64,7 @@ Display search assumes the display is monotonic in the normalized value. Times c
 ## Automation
 | call | |
 |---|---|
-| **`H.automate_display(track, fx, param, points, {clear, shape})`** | points `{ {bar, display_value, shape?}, ... }`; returns the evaluated envelope values to verify. `clear` defaults to true. |
+| **`H.automate_display(track, fx, param, points, {clear, shape})`** | points `{ {bar, display_value, shape?}, ... }`; returns one record per point read back from the envelope: `{bar, want, display, native}`. **Compare `want` with `display`**; `native` is the envelope's internal unit (dB for JS sliders, linear gain for ReaEQ, …). `clear` defaults to true. *(helpers 3.0: used to return bare native numbers)* |
 | `H.automate_native(track, fx, param, points, o)` | points in the envelope's native units |
 | `H.envelope_values(track, fx, param, bars)` | evaluate an FX envelope |
 | ~~`H.automate`~~ | deprecated: normalized values are wrong for non-linear params |
@@ -77,12 +77,26 @@ Track volume/pan envelopes aren't wrapped: put `JS: Volume/Pan Adjustment (Cocko
 |---|---|
 | `H.region(name, start_bar, end_bar, color?)`, `H.marker(name, bar, color?)`, `H.clear_markers()` | |
 | `H.cursor(bar)`, `H.play(bar?)`, `H.stop()` | |
-| `H.dump({notes, sends})` | snapshot: tempo, timesig, tracks (vol, pan, mute, solo, master_send, fx, items), regions, markers |
-| `H.project_file()`, `H.project_dir()` | |
+| `H.dump({notes, sends})` | snapshot, see **dump fields** below |
+| **`H.listen({from_bar, to_bar, tracks, loop, play})`** | set REAPER up for the user to listen: loop + time selection over the bars (default: whole project), repeat on (`loop=false` off), cursor at the start, arrange view zoomed to the range, `tracks` (names) selected and scrolled into view; `play=true` starts playback. A clean project stays clean. Returns `{from_bar, to_bar, seconds, start ("m:ss"), loop, playing, tracks, saved_project}` |
+| `H.project_file()`, `H.project_dir()` | of the **active tab** (every call works on the active tab) |
+| **`H.require_project(name)`** | error unless the active tab's file name contains `name` (case-insensitive). Put it first in every editing request (the CLI's `--project` does this for you): the user may switch tabs |
 | `H.save()` | saves to the project's own file; errors on a never-saved project (a Save As dialog would block the bridge) |
-| `H.render(name, {start_bar, end_bar, tail, dir})` | master → `<project>/renders/<name>.wav`, 24-bit 44.1 kHz; replaces an existing file; restores the project's own render settings afterwards and re-saves a project that was clean before (so it stays clean; unsaved changes are never saved for you); returns `{path, size, seconds, replaced, saved_project}` |
+| `H.render(name, {start_bar, end_bar, tail, dir, srate, channels})` | master → `<project>/renders/<name>.wav`, 24-bit, `srate` default 44100, `channels` 2 or 1 (mono fold-down); replaces an existing file; restores the project's own render settings afterwards and re-saves a project that was clean before (so it stays clean; unsaved changes are never saved for you); returns `{path, size, seconds, replaced, saved_project, srate, channels}` |
+
+### dump fields
+```
+{ tempo, timesig "3/8", length_bars, cursor_bar, project (path),
+  master = { vol_db, fx = {"JS: Master Limiter", ...} },
+  tracks = { { n (1-based), name, vol_db, pan (-1..1), mute, solo, master_send,
+               fx = {"VST3i: Surge XT ...", "ReaEQ [off]", ...},
+               sends = { {dest, vol_db} }            -- only with {sends = true}
+               items = { {start_bar, end_bar, name, midi, notes (count),
+                          note_list = { {p, s, l, v, ch} } } } } },   -- note_list only with {notes = true}
+  regions = { {name, start_bar, end_bar, idx} }, markers = { {name, bar, idx} } }
+```
 
 ## Things that block the bridge (avoid)
-Anything that opens a modal dialog: Save As on an unsaved project, quitting/closing a dirty project,
+Anything that opens a modal dialog: Save As on an unsaved project, a new project, quitting/closing a dirty project,
 some render settings, plugin error popups. While a dialog is open the bridge doesn't tick:
 `node reaper.mjs status` lists the dialog titles. Ask the user to close them.

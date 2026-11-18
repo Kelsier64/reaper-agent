@@ -6,7 +6,7 @@ local ctx = ... or {}
 local encode = ctx.encode or function(v) return tostring(v) end
 
 local H = {}
-H.version = "2.1.0"
+H.version = "3.0.0"
 
 local function round(x, d) local m = 10 ^ (d or 4); return math.floor(x * m + 0.5) / m end
 H.round = round
@@ -273,13 +273,18 @@ function H.fx_list(track)
   end
   return out
 end
+-- filter: case-insensitive substring; a leading "^" matches the start of the name ("^A Osc")
 function H.params(track, fx, filter)
   local tr = need_track(track)
   local fxi = resolve_fx(tr, fx)
   local out = {}
+  local f = filter and tostring(filter):lower()
+  local anchored = f and f:sub(1, 1) == "^"
+  if anchored then f = f:sub(2) end
   for i = 0, reaper.TrackFX_GetNumParams(tr, fxi) - 1 do
     local _, pname = reaper.TrackFX_GetParamName(tr, fxi, i, "")
-    if not filter or pname:lower():find(tostring(filter):lower(), 1, true) then
+    local pos = f and pname:lower():find(f, 1, true)
+    if not f or (pos and (not anchored or pos == 1)) then
       local _, f = reaper.TrackFX_GetFormattedParamValue(tr, fxi, i, "")
       out[#out + 1] = { i = i, name = pname, v = round(reaper.TrackFX_GetParamNormalized(tr, fxi, i), 4), fmt = f }
     end
@@ -389,7 +394,9 @@ function H.automate_native(track, fx, param, points, o)
   return env
 end
 -- points: {{bar, display_value, shape?}, ...} e.g. {{1, -22}, {18, 0}} for a dB param.
--- Returns the evaluated envelope value at each point (native units) for checking.
+-- Returns one record per point, read back from the envelope:
+--   { bar, want (what you asked), display (plugin's display string), native (envelope value) }
+-- Compare want with display: native units differ per plugin (ReaEQ gain is linear, not dB).
 function H.automate_display(track, fx, param, points, o)
   o = o or {}
   local tr = need_track(track)
@@ -404,10 +411,13 @@ function H.automate_display(track, fx, param, points, o)
   reaper.TrackFX_SetParamNormalized(tr, fxi, pi, keep)
   local env = H.automate_native(tr, fxi, pi, nat, o)
   local check = {}
-  for _, pt in ipairs(points) do
+  for i, pt in ipairs(points) do
     local _, v = reaper.Envelope_Evaluate(env, H.bar_time(pt[1]), 44100, 0)
-    check[#check + 1] = round(v, 3)
+    reaper.TrackFX_SetParam(tr, fxi, pi, v)
+    local _, disp = reaper.TrackFX_GetFormattedParamValue(tr, fxi, pi, "")
+    check[i] = { bar = pt[1], want = pt[2], display = disp, native = round(v, 4) }
   end
+  reaper.TrackFX_SetParamNormalized(tr, fxi, pi, keep)
   return check
 end
 -- deprecated: normalized values are wrong for non-linear params; kept for old cmds
@@ -448,8 +458,55 @@ function H.cursor(bar) reaper.SetEditCurPos(H.bar_time(bar), true, false) end
 function H.play(bar) if bar then H.cursor(bar) end reaper.OnPlayButton() end
 function H.stop() reaper.OnStopButton() end
 
+---------------------------------------------------------------- listening
+-- Set REAPER up so the user can listen right away: loop/time selection over the bars, cursor at
+-- the start, arrange view zoomed to the range, given tracks selected and scrolled into view.
+-- o: from_bar, to_bar (default: whole project), tracks = {names}, loop (default true), play.
+-- Only view/transport state changes; a project that was clean stays clean.
+function H.listen(o)
+  o = o or {}
+  local was_clean = reaper.IsProjectDirty(0) == 0
+  local t0 = o.from_bar and H.bar_time(o.from_bar) or 0
+  local t1 = o.to_bar and H.bar_time(o.to_bar) or reaper.GetProjectLength(0)
+  if t1 <= t0 then error("listen: to_bar must be after from_bar", 2) end
+  if reaper.GetPlayState() & 1 == 1 then reaper.OnStopButton() end
+  reaper.GetSet_LoopTimeRange2(0, true, true, t0, t1, false)    -- loop points
+  reaper.GetSet_LoopTimeRange2(0, true, false, t0, t1, false)   -- time selection
+  reaper.GetSetRepeat(o.loop == false and 0 or 1)
+  reaper.SetEditCurPos(t0, true, false)
+  local pad = (t1 - t0) * 0.03
+  reaper.GetSet_ArrangeView2(0, true, 0, 0, math.max(0, t0 - pad), t1 + pad)
+  local selected = {}
+  if o.tracks then
+    for i = 0, reaper.CountTracks(0) - 1 do reaper.SetTrackSelected(reaper.GetTrack(0, i), false) end
+    for _, ref in ipairs(o.tracks) do
+      local tr = need_track(ref)
+      reaper.SetTrackSelected(tr, true)
+      selected[#selected + 1] = select(2, reaper.GetTrackName(tr))
+    end
+    reaper.Main_OnCommand(40913, 0) -- Track: vertical scroll selected tracks into view
+  end
+  if o.play then reaper.OnPlayButton() end
+  local saved = false
+  if was_clean and reaper.IsProjectDirty(0) ~= 0 and H.project_file() ~= "" then reaper.Main_SaveProject(0, false); saved = true end
+  return { from_bar = H.time_bar(t0), to_bar = H.time_bar(t1), seconds = round(t1 - t0, 2),
+           start = string.format("%d:%04.1f", t0 // 60, t0 % 60), loop = o.loop ~= false,
+           playing = o.play == true, tracks = selected, saved_project = saved }
+end
+
 ---------------------------------------------------------------- project / render
 function H.project_file() return select(2, reaper.EnumProjects(-1)) end
+-- error unless the active project tab is the expected one (file name substring, case-insensitive).
+-- Use at the top of every editing request: the user may have switched tabs in REAPER.
+function H.require_project(name)
+  local file = H.project_file() or ""
+  local base = file:match("[^\\/]+$") or ""
+  if base == "" then error("require_project: the active tab has never been saved (expected " .. tostring(name) .. ")", 2) end
+  if not base:lower():find(tostring(name):lower(), 1, true) then
+    error("require_project: active project is " .. base .. ", expected " .. tostring(name) .. " (did the user switch tabs?)", 2)
+  end
+  return file
+end
 function H.project_dir()
   local fn = H.project_file()
   if fn and fn ~= "" then return fn:match("^(.*[\\/])") end
@@ -463,7 +520,8 @@ function H.save()
   return fn
 end
 -- render master mix to <dir>/<name>.wav (24-bit, 44.1 kHz, stereo). Replaces an existing file
--- (REAPER silently skips rendering if the file exists). o: start_bar, end_bar, tail (s), dir
+-- (REAPER silently skips rendering if the file exists). o: start_bar, end_bar, tail (s), dir,
+-- srate (default 44100), channels (2, or 1 = mono fold-down)
 -- The project's own render settings are restored afterwards. A project that was clean before
 -- is saved again so it stays clean (the settings change would otherwise mark it modified);
 -- a project with unsaved changes is left unsaved (that is the user's call).
@@ -472,6 +530,7 @@ local RENDER_STR = { "RENDER_FILE", "RENDER_PATTERN", "RENDER_FORMAT" }
 function H.render(name, o)
   o = o or {}
   if not tostring(name):match("^[%w%-_%.]+$") then error("render name must be [A-Za-z0-9-_.]", 2) end
+  if o.channels and o.channels ~= 1 and o.channels ~= 2 then error("render channels must be 1 or 2", 2) end
   local dir = o.dir or (H.project_dir() .. "renders")
   dir = dir:gsub("[\\/]+$", "")
   reaper.RecursiveCreateDirectory(dir, 0)
@@ -490,8 +549,8 @@ function H.render(name, o)
     reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, true)
     reaper.GetSetProjectInfo(0, "RENDER_STARTPOS", t0, true)
     reaper.GetSetProjectInfo(0, "RENDER_ENDPOS", t1, true)
-    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2, true)
-    reaper.GetSetProjectInfo(0, "RENDER_SRATE", 44100, true)
+    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", o.channels or 2, true)
+    reaper.GetSetProjectInfo(0, "RENDER_SRATE", o.srate or 44100, true)
     reaper.GetSetProjectInfo_String(0, "RENDER_FILE", dir, true)
     reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN", name, true)
     reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "ZXZhdxgAAA==", true) -- WAV 24-bit
@@ -508,7 +567,8 @@ function H.render(name, o)
   local size = f and f:seek("end") or 0
   if f then f:close() end
   if size == 0 then error("render produced no file: " .. path, 2) end
-  return { path = path, size = size, seconds = round(t1 - t0, 3), replaced = replaced, saved_project = saved }
+  return { path = path, size = size, seconds = round(t1 - t0, 3), replaced = replaced, saved_project = saved,
+           srate = o.srate or 44100, channels = o.channels or 2 }
 end
 
 -- project snapshot; o.notes = true includes every note, o.sends = true includes sends
@@ -521,6 +581,11 @@ function H.dump(o)
     cursor_bar = H.time_bar(reaper.GetCursorPosition()),
     project = H.project_file(), tracks = {}, regions = {}, markers = {},
   }
+  local m = reaper.GetMasterTrack(0)
+  d.master = { vol_db = round(H.vol2db(reaper.GetMediaTrackInfo_Value(m, "D_VOL")), 2), fx = {} }
+  for f = 0, reaper.TrackFX_GetCount(m) - 1 do
+    d.master.fx[#d.master.fx + 1] = fx_name(m, f) .. (reaper.TrackFX_GetEnabled(m, f) and "" or " [off]")
+  end
   for i = 0, reaper.CountTracks(0) - 1 do
     local tr = reaper.GetTrack(0, i)
     local _, name = reaper.GetTrackName(tr)
