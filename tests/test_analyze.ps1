@@ -29,4 +29,25 @@ $top = [regex]::Match($out, 'strongest peaks: (\d+)Hz').Groups[1].Value
 Check 'strongest peak ~1000 Hz' ([Math]::Abs([int]$top - 1000) -le 6) "top=$top"
 $lr = [regex]::Matches($out, '^\s+0s\s+(-?[\d.]+)\s+(-?[\d.]+)', 'Multiline')
 Check 'L-R balance +6.0 dB' ($lr.Count -gt 0 -and [Math]::Abs([double]$lr[0].Groups[2].Value - 6.02) -lt 0.2) "lr=$($lr[0].Groups[2].Value)"
+Check 'stereo file is not labeled mono' ($out -notmatch 'mono') $out
+
+# mono content: a 1-channel file and a stereo file with L = R
+function Write-Sine([string]$path, [int]$chans) {
+  $ms = New-Object IO.MemoryStream; $bw = New-Object IO.BinaryWriter $ms
+  $ba = 2 * $chans
+  $bw.Write([Text.Encoding]::ASCII.GetBytes('RIFF')); $bw.Write([int](36 + $n * $ba)); $bw.Write([Text.Encoding]::ASCII.GetBytes('WAVEfmt '))
+  $bw.Write([int]16); $bw.Write([int16]1); $bw.Write([int16]$chans); $bw.Write([int]$rate); $bw.Write([int]($rate * $ba)); $bw.Write([int16]$ba); $bw.Write([int16]16)
+  $bw.Write([Text.Encoding]::ASCII.GetBytes('data')); $bw.Write([int]($n * $ba))
+  for ($i = 0; $i -lt $n; $i++) {
+    $v = [int16]([Math]::Round([Math]::Sin(2 * [Math]::PI * 440 * $i / $rate) * 0.5 * 32767))
+    for ($c = 0; $c -lt $chans; $c++) { $bw.Write($v) }
+  }
+  $bw.Flush(); [IO.File]::WriteAllBytes($path, $ms.ToArray())
+}
+$m1 = Join-Path $tmp 'mono_1ch.wav'; Write-Sine $m1 1
+$m2 = Join-Path $tmp 'mono_lr.wav'; Write-Sine $m2 2
+$o1 = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tools\analyze.ps1') $m1) -join "`n"
+$o2 = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tools\analyze.ps1') $m2) -join "`n"
+Check '1-channel file labeled (mono file)' ($o1 -match '1 ch.*\(mono file\)' -and $o1 -match '0s\s+\S+\s+\S+\s+mono') $o1
+Check 'L = R stereo labeled (mono content)' ($o2 -match '\(mono content: L = R\)' -and $o2 -match '0s\s+\S+\s+\S+\s+mono') $o2
 exit $fails

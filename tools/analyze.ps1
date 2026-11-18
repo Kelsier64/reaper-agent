@@ -42,6 +42,10 @@ public static class Ana {
     double peak = 0, sum = 0;
     for (int f = 0; f < frames; f++) { peak = Math.Max(peak, Math.Max(Math.Abs(L[f]), Math.Abs(R[f]))); sum += (L[f] * L[f] + R[f] * R[f]) / 2; }
     double rms = Math.Sqrt(sum / frames);
+    // mono content (1 channel, or L = R): the width column would just print -150 dB, so say "mono"
+    double gm = 0, gs = 0;
+    for (int f = 0; f < frames; f++) { double m = (L[f] + R[f]) / 2, d = (L[f] - R[f]) / 2; gm += m * m; gs += d * d; }
+    bool mono = ch == 1 || gs <= gm * 1e-10;
     int N = 8192; var spec = new double[N / 2]; int segs = 0;
     var win = new double[N]; for (int i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (N - 1));
     for (int st = 0; st + N <= frames; st += N / 2) {
@@ -54,7 +58,8 @@ public static class Ana {
       for (int b = 0; b < band.Length; b++) if (fq >= edges[b] && fq < edges[b + 1]) band[b] += spec[k]; }
     double bmax = 0; foreach (var b in band) bmax = Math.Max(bmax, b);
     var sb = new StringBuilder();
-    sb.AppendFormat("file: {0}\nformat: {1} Hz, {2} ch, {3}-bit, {4:F1} s\n", Path.GetFileName(path), rate, ch, bits, frames / (double)rate);
+    sb.AppendFormat("file: {0}\nformat: {1} Hz, {2} ch, {3}-bit, {4:F1} s{5}\n", Path.GetFileName(path), rate, ch, bits, frames / (double)rate,
+      mono ? (ch == 1 ? "  (mono file)" : "  (mono content: L = R)") : "");
     sb.AppendFormat("peak: {0:F1} dBFS   rms: {1:F1} dBFS   crest: {2:F1} dB\n", 20 * Math.Log10(peak + 1e-12), 20 * Math.Log10(rms + 1e-12), 20 * Math.Log10((peak + 1e-12) / (rms + 1e-12)));
     sb.Append("band energy (dB rel. loudest band):\n");
     for (int b = 0; b < band.Length; b++) {
@@ -73,8 +78,9 @@ public static class Ana {
       int en = Math.Min(frames, st + seg); double sl = 0, sr = 0, sm = 0, ss = 0;
       for (int f = st; f < en; f++) { sl += L[f] * L[f]; sr += R[f] * R[f]; double m = (L[f] + R[f]) / 2, d = (L[f] - R[f]) / 2; sm += m * m; ss += d * d; }
       int n = en - st;
-      sb.AppendFormat("  {0,5:F0}s  {1,7:F1}  {2,6:F1}  {3,8:F1}\n", st / (double)rate,
-        10 * Math.Log10((sl + sr) / (2.0 * n) + 1e-15), 10 * Math.Log10((sl + 1e-15) / (sr + 1e-15)), 10 * Math.Log10((ss + 1e-15) / (sm + 1e-15))); }
+      string width = (ss <= sm * 1e-10) ? "mono" : (10 * Math.Log10((ss + 1e-15) / (sm + 1e-15))).ToString("F1");
+      sb.AppendFormat("  {0,5:F0}s  {1,7:F1}  {2,6:F1}  {3,8}\n", st / (double)rate,
+        10 * Math.Log10((sl + sr) / (2.0 * n) + 1e-15), 10 * Math.Log10((sl + 1e-15) / (sr + 1e-15)), width); }
     return sb.ToString();
   }
 }
