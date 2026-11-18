@@ -87,8 +87,14 @@ try {
     writeFileSync(join(cwd, 'q.lua'), 'return H.n("C4")', 'utf8');
     const ex = run('node', [cli, 'exec', 'q.lua', '--readonly'], { cwd });
     check('copied skill: exec a file relative to cwd', ex.code === 0 && ex.json?.result === 60, ex.out);
-    const sx = run('node', [cli, 'exec', '-', '--readonly'], { cwd, input: 'return 1 + 1', env: { ...process.env, REAPER_CLI_CMD_DIR: '' } });
-    check('copied skill: stdin history goes to <cwd>/cmds/cli', sx.json?.result === 2 && existsSync(join(cwd, 'cmds', 'cli')) && readdirSync(join(cwd, 'cmds', 'cli')).length === 1, sx.out);
+    // stdin history: REAPER_CLI_CMD_DIR overrides the default (<REAPER project folder>/cmds/cli; never written by tests)
+    const hist = join(cwd, 'hist');
+    const sx = run('node', [cli, 'exec', '-', '--readonly'], { cwd, input: 'return 1 + 1', env: { ...process.env, REAPER_CLI_CMD_DIR: hist } });
+    check('copied skill: stdin history goes to REAPER_CLI_CMD_DIR', sx.json?.result === 2 && existsSync(hist) && readdirSync(hist).length === 1, sx.out);
+    const { reaperProjectDir } = await import('../tools/reaper.mjs');
+    const stj = run('node', [cli, 'status'], { cwd }).json;
+    check('default history folder = folder of the active REAPER project',
+      !!stj?.status?.project && reaperProjectDir()?.toLowerCase() === dirname(stj.status.project).toLowerCase(), `${reaperProjectDir()} vs ${stj?.status?.project}`);
 
     // install.ps1 (bundled) with a fake APPDATA: never replaces a different bridge without -Force
     const appdata = mkdtempSync(join(tmpdir(), 'reaper-appdata-'));
@@ -164,6 +170,11 @@ return { results = out, back = reaper.EnumProjects(-1) == orig }
       check('examples.md: H.set returns the requested display values',
         /^900/.test(set.res.eq_freq) && /^-6/.test(set.res.eq_gain) && /^300/.test(set.res.attack) && set.res.mute === 'On', JSON.stringify(set.res));
     } else check('examples.md: parameter example returned values', false, JSON.stringify(res.results));
+    const auto = res.results.find((r) => Array.isArray(r.res) && r.res[0] && r.res[0].want !== undefined);
+    check('examples.md: automation example returns {bar, want, display, native}',
+      !!auto && auto.res.every((p) => typeof p.display === 'string' && Math.abs(parseFloat(p.display) - p.want) < 0.3), JSON.stringify(auto?.res));
+    const lis = res.results.find((r) => r.res && r.res.loop !== undefined && r.res.tracks);
+    check('examples.md: listen example selects Bass and Pad', !!lis && lis.res.tracks.join(',') === 'Bass,Pad' && lis.res.playing === false, JSON.stringify(lis?.res));
   }
 } catch (e) {
   check('no exceptions', false, e.stack || e);

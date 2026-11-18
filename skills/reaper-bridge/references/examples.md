@@ -66,7 +66,21 @@ local check = H.automate_display(tr, "Volume/Pan", "Volume", {
   { 1, -22 }, { 10, -11 }, { 18, 0 }, { 31, -16 },
 })
 H.save()
-return check   -- 實際評估出來的值
+return check   -- 每一點 {bar, want, display, native}：比對 want 和 display
+```
+
+## 帶參數的腳本（`R exec 檔案 --arg track=Bass --arg db=-4`）
+```lua
+local tr = ARGS and ARGS.track or "Bass"          -- 沒傳參數時用預設值，方便單獨測試
+local db = ARGS and ARGS.db or -4
+H.mix(tr, { vol_db = db })
+H.save()
+return { track = tr, vol_db = db }
+```
+
+## 設好 REAPER 讓使用者試聽（等同 `R listen --from 2 --to 6 --tracks "Bass,Pad"`）
+```lua
+return H.listen({ from_bar = 2, to_bar = 6, tracks = { "Bass", "Pad" } })
 ```
 
 ## 送到 bus

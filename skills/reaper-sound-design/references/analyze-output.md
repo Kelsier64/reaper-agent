@@ -25,7 +25,8 @@ timeline (3 s): time  rms dBFS  L-R dB  side/mid dB
 | `strongest peaks` | 最強的頻譜峰 | 對照音高（440 Hz = A4）或找共振、嗡嗡聲 |
 | `timeline` / `rms dBFS` | 每 3 秒的響度 | 漸強漸弱、段落對比、結尾有沒有收乾淨 |
 | `timeline` / `L-R dB` | 左減右，**正值 = 偏左** | 檢查 pan automation；整段固定偏一邊通常是效果器不對稱 |
-| `timeline` / `side/mid dB` | 立體聲寬度 | 接近 0 = 很寬；−10 以下 = 接近單聲道；正值 = 左右相位相反的成分多，要小心 |
+| `timeline` / `side/mid dB` | 立體聲寬度 | 接近 0 = 很寬；−10 以下 = 接近單聲道；正值 = 左右相位相反的成分多，要小心。完全單聲道的段落直接顯示 `mono` |
+| `format` 後的 `(mono file)` / `(mono content: L = R)` | 單聲道檔案，或立體聲但左右完全相同 | 遊戲世界裡的聲源通常就該是這樣；BGM 出現這個表示寬度效果沒作用 |
 
 ## 注意
 - 頻段數字是相對值，不同版本之間比較「形狀」，不要只比單一數字。
