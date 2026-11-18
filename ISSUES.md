@@ -40,7 +40,7 @@
 
 ### [WORKAROUND] PowerShell 會吃掉命令列參數裡的雙引號
 - 2026-11-18。`send.ps1 -Code "return H.chord(\"Fm7\")"` 送到 REAPER 時字串已經沒有引號了。
-- 處理：程式碼一律存成檔案再用 `-File` 傳；`-Code` 參數已經拿掉。MCP server 也是先寫檔再送。
+- 處理：程式碼一律存成檔案再用 `-File` 傳；`-Code` 參數已經拿掉。CLI（`tools/reaper.mjs`）也是讀檔或 stdin，不經過命令列參數。
 
 ### [WORKAROUND] 會跳出對話框的動作會卡住 bridge
 - 2026-11-18。用 action 40004 結束 REAPER 時跳出 "REAPER Query"（是否儲存），必須由使用者手動點。
