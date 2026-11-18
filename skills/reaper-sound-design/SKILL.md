@@ -6,7 +6,8 @@ description: 在 REAPER 裡設計音色、調合成器與效果器參數（Surge
 # 音色設計與混音
 
 這個 skill 搭配 `reaper-bridge` 使用：CLI 在它的資料夾裡，也就是這個 skill 旁邊的 `../reaper-bridge/`。
-下面的 `R` 代表 `node "<skill>/../reaper-bridge/scripts/reaper.mjs"`。
+下面的 `R` 是文件裡的簡寫，代表 `node "<skill>/../reaper-bridge/scripts/reaper.mjs"`。
+執行時展開成完整路徑，不要存成 shell 變數（權限檢查會擋掉含變數的指令）；Lua 先寫成檔案再 `R exec 檔案`。
 先照 `reaper-bridge` 的流程做（status → dump → 說明要動哪些軌），這裡只講音色和檢查。
 
 ## 找參數、設參數

@@ -9,8 +9,10 @@ description: 透過 Lua bridge 操作使用者電腦上正在執行的 REAPER（
 使用者會在中間手動調整，所以 REAPER 裡的現況永遠比你記得的可靠。
 你聽不到聲音，所以每次動到聲音都要 render 再分析，最後請使用者聽。
 
-下面的 `R` 代表 `node "<skill>/scripts/reaper.mjs"`，`<skill>` 是這個 skill 的資料夾（載入 skill 時顯示的 Base directory）。
-相對路徑都以你目前的工作資料夾為準。
+下面的 `R` 是文件裡的簡寫，代表 `node "<skill>/scripts/reaper.mjs"`，`<skill>` 是這個 skill 的資料夾（載入 skill 時顯示的 Base directory）。
+**執行時把它展開成完整的指令**，例如 `node "C:/Users/.../reaper-bridge/scripts/reaper.mjs" status`。
+不要存成 shell 變數（`R=...; $R status`、`$s=...`）：Claude Code 之類的權限檢查看不到變數的內容，會直接擋掉這種指令。
+一個指令只做一件事，不要用 `;` 串好幾個。相對路徑都以你目前的工作資料夾為準。
 
 ## 指令
 | 指令 | 用途 |
@@ -21,7 +23,7 @@ description: 透過 Lua bridge 操作使用者電腦上正在執行的 REAPER（
 | `R dump [--notes] [--sends]` | 專案快照：tempo、拍號、軌道（音量、pan、FX、items）、regions、markers |
 | `R exec 檔案.lua --label "做了什麼"` | 執行 Lua。一次請求 = 一個 undo 點 `Claude: <label>` |
 | `R exec 檔案.lua --readonly` | 查詢，不建 undo 點 |
-| `R exec - --label "..."` | 從 stdin 讀程式碼（bash heredoc），自動存到 `cmds/cli/` |
+| `R exec - --label "..."` | 從 stdin 讀程式碼，自動存到 `cmds/cli/`（只適合很短的查詢，見「Shell 注意事項」） |
 | `R render 名稱 [--start-bar N --end-bar N --tail 秒]` | master → `<REAPER 專案資料夾>/renders/名稱.wav`，會取代舊檔 |
 | `R analyze 檔案.wav` | 峰值/RMS、頻段、頻譜峰、時間軸（怎麼讀：`reaper-sound-design` skill） |
 | 任何指令加 `--out 檔案` | 完整輸出寫到檔案，只印摘要。大的 dump 用這個，再讀需要的部分 |
@@ -62,14 +64,11 @@ Exit code：0 成功、1 用法錯誤、2 bridge 沒在跑或被擋住、3 timeo
 - `helpers_error` 有值 → helpers 檔案壞了，bridge 正在用上一版。告訴使用者。
 
 ## Shell 注意事項
-- **PowerShell 會吃掉傳給外部程式的參數裡的雙引號**，用管線送中文到 stdin 也可能變亂碼：
-  在 PowerShell 裡一律寫成檔案再 `R exec 檔案`，`--label` 不要放雙引號。
-- bash 可以用 heredoc：
-  ```bash
-  node "<skill>/scripts/reaper.mjs" exec - --readonly <<'EOF'
-  return H.fx_list("Melody")
-  EOF
-  ```
+- **Lua 一律先寫成檔案**（用你的寫檔工具，查詢用的可以放暫存資料夾），再 `R exec 檔案`。這是最可靠的方式：
+  - PowerShell 會吃掉傳給外部程式的參數裡的雙引號，用管線送中文到 stdin 也可能變亂碼。
+  - bash 的 heredoc 裡只要 Lua 同時有 `{` 和引號（幾乎每段都有），Claude Code 的權限檢查就會當成可疑的展開而擋掉。
+- `R exec -`（stdin）只留給沒有大括號和引號的極短查詢，例如 `return H.project_file()`。
+- `--label` 不要放雙引號。
 - `render` 可能要好幾分鐘：shell 指令的 timeout 設 10 分鐘，或放到背景執行。
 
 ## 不能做的事

@@ -5,6 +5,22 @@
 
 ---
 
+### [FIXED] `H.render` 會蓋掉專案自己的 render 設定，並讓專案變成未存檔
+- 2026-11-18。還原 Distance 並存檔後做了一次檢查 render，專案又變成 `[modified]`，之後的存檔把 render 目標寫成
+  `tests\tmp\restore_check.wav`。使用者自己在 REAPER 裡設定的 render 路徑、檔名、範圍也會被蓋掉。
+- 原因：`H.render` 直接改寫 `RENDER_FILE`/`RENDER_PATTERN`/範圍/格式，render 完沒有改回去。
+- 修正（helpers 2.1.0）：render 前記住這些設定、結束後（包括出錯時）改回去；render 前是乾淨的專案會再存一次以保持乾淨，
+  原本就有未存變更的不會替使用者存。回傳多了 `saved_project`。曲子的 render 設定用 `cmds/18_restore_render_settings.lua` 改回 v2 的值。
+  測試：`helpers: render restores the project's render settings and dirty state`。
+
+### [WORKAROUND] Claude Code 的權限檢查擋掉 skill 示範的指令寫法
+- 2026-11-18。用 `claude -p` 在 repo 外測試已安裝的 skills：兩個 skill 都正確觸發，但各被擋了一次。
+  - `R=".../reaper.mjs"; $R status`（PowerShell 也一樣：`$s=...`）→ "A variable in this command can't be checked before it runs"。
+  - bash heredoc 送 Lua（`exec - <<'EOF'`，內容有 `{` 和引號）→ "Contains brace with quote character (expansion obfuscation)"。
+- 原因：skill 用 `R` 當簡寫，agent 照字面設成 shell 變數；heredoc 是 skill 推薦的寫法之一。兩次 agent 都自己改用完整路徑和寫檔，成功完成。
+- 處理：skills 改成明確要求展開完整路徑、不要用變數、Lua 先寫檔再 `exec`；stdin 只留給極短查詢。CLAUDE.md 同步更新。
+  重跑三個測試（列軌道、分析 WAV、查 Surge 參數）都沒有再被擋。目前沒有自動測試，只能用 `claude -p` 手動重跑。
+
 ### [OPEN] Surge XT 的 Amp EG Attack 設不到很小的值（2 ms 會變成 0.0 ms）
 - 2026-11-18。`H.set(track, "Surge", "A Amp EG Attack", 2)` 回傳 `0.0 ms`。
 - 推測：Surge 在接近 0 的區間顯示值會四捨五入，binary search 落在顯示 "0.0" 的區域。還沒確認實際的 attack 是多少。

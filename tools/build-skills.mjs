@@ -53,7 +53,8 @@ export function versions() {
   let commit = null, dirty = null;
   try {
     commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
-    dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).trim() !== '';
+    // only what goes into a skill counts (an unsaved song or notes.md does not make a build dirty)
+    dirty = execFileSync('git', ['status', '--porcelain', '--', 'skills', 'tools', 'bridge'], { cwd: ROOT, encoding: 'utf8' }).trim() !== '';
   } catch { }
   return { helpers: h, bridge: b, cli: c, commit, dirty };
 }
