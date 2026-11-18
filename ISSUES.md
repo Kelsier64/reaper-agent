@@ -5,6 +5,20 @@
 
 ---
 
+### [FIXED] apocalypseRV 實戰回報的 skill 問題（10 項）
+- 2026-11-18。另一個 session 用已安裝的 skills 做了 Slender Speaker 的曲子，流程沒有失敗，但回報了這些問題，全部在 helpers 3.0.0 / CLI 1.2.0 處理：
+  1. 多個專案分頁沒有防呆，使用者切分頁時指令會改到別首 → `H.require_project`、CLI `--project`。測試：`helpers: require_project guards the active tab`、`cli: --project mismatch`。
+  2. `H.automate_display` 回傳 native 值，ReaEQ/Surge 無法對照 → 回傳 `{bar, want, display, native}`。測試：`automate_display reports display values for non-dB native units (ReaEQ)`。
+  3. `cmds/`、stdin 紀錄跑到 agent 的工作資料夾（那次剛好是這個 repo）→ 預設放在 REAPER 專案資料夾。
+  4. 沒有「開新曲子」流程 → reaper-bridge skill 新增一節。
+  5. Lua 腳本不能帶參數 → `--arg k=v`（`ARGS`）。測試：`cli: --arg strings and numbers`。
+  6. render 只能 44.1 kHz 立體聲 → `--srate`、`--mono`。測試：`render srate/channels: 48 kHz mono`。
+  7–8. 候選沒對齊響度、遠近效果的 send 位置 → 寫進 reaper-sound-design。
+  9. dump 欄位沒文件、沒有 master → API.md 加 dump 欄位，dump 加 `master`。
+  10. `H.params` 只能子字串、analyze 對單聲道印 -150 dB → `^` 開頭比對、analyze 標 `mono`。
+- 同時新增試聽交付：`listen`（REAPER 裡設好循環範圍）、試聽頁 `renders/listen.html`、WAV 旁的 `.txt` 說明、有傳檔工具時直接傳 WAV。
+  用 `claude -p` 在暫時的 TrialSong 分頁實測過整個流程，沒有被權限檢查擋住。
+
 ### [FIXED] `H.render` 會蓋掉專案自己的 render 設定，並讓專案變成未存檔
 - 2026-11-18。還原 Distance 並存檔後做了一次檢查 render，專案又變成 `[modified]`，之後的存檔把 render 目標寫成
   `tests\tmp\restore_check.wav`。使用者自己在 REAPER 裡設定的 render 路徑、檔名、範圍也會被蓋掉。
