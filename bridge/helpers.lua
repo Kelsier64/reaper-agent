@@ -6,7 +6,7 @@ local ctx = ... or {}
 local encode = ctx.encode or function(v) return tostring(v) end
 
 local H = {}
-H.version = "2.0.0"
+H.version = "2.1.0"
 
 local function round(x, d) local m = 10 ^ (d or 4); return math.floor(x * m + 0.5) / m end
 H.round = round
@@ -464,6 +464,11 @@ function H.save()
 end
 -- render master mix to <dir>/<name>.wav (24-bit, 44.1 kHz, stereo). Replaces an existing file
 -- (REAPER silently skips rendering if the file exists). o: start_bar, end_bar, tail (s), dir
+-- The project's own render settings are restored afterwards. A project that was clean before
+-- is saved again so it stays clean (the settings change would otherwise mark it modified);
+-- a project with unsaved changes is left unsaved (that is the user's call).
+local RENDER_NUM = { "RENDER_SETTINGS", "RENDER_BOUNDSFLAG", "RENDER_STARTPOS", "RENDER_ENDPOS", "RENDER_CHANNELS", "RENDER_SRATE" }
+local RENDER_STR = { "RENDER_FILE", "RENDER_PATTERN", "RENDER_FORMAT" }
 function H.render(name, o)
   o = o or {}
   if not tostring(name):match("^[%w%-_%.]+$") then error("render name must be [A-Za-z0-9-_.]", 2) end
@@ -474,21 +479,36 @@ function H.render(name, o)
   local replaced = os.remove(path) and true or false
   local t0 = o.start_bar and H.bar_time(o.start_bar) or 0
   local t1 = (o.end_bar and H.bar_time(o.end_bar) or reaper.GetProjectLength(0)) + (o.tail or 2)
-  reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", 0, true)
-  reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, true)
-  reaper.GetSetProjectInfo(0, "RENDER_STARTPOS", t0, true)
-  reaper.GetSetProjectInfo(0, "RENDER_ENDPOS", t1, true)
-  reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2, true)
-  reaper.GetSetProjectInfo(0, "RENDER_SRATE", 44100, true)
-  reaper.GetSetProjectInfo_String(0, "RENDER_FILE", dir, true)
-  reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN", name, true)
-  reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "ZXZhdxgAAA==", true) -- WAV 24-bit
-  reaper.Main_OnCommand(42230, 0) -- render with current settings, auto-close dialog
+
+  local was_clean = reaper.IsProjectDirty(0) == 0
+  local keep = {}
+  for _, k in ipairs(RENDER_NUM) do keep[k] = reaper.GetSetProjectInfo(0, k, 0, false) end
+  for _, k in ipairs(RENDER_STR) do local _, v = reaper.GetSetProjectInfo_String(0, k, "", false); keep[k] = v end
+
+  local ok, err = pcall(function()
+    reaper.GetSetProjectInfo(0, "RENDER_SETTINGS", 0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_BOUNDSFLAG", 0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_STARTPOS", t0, true)
+    reaper.GetSetProjectInfo(0, "RENDER_ENDPOS", t1, true)
+    reaper.GetSetProjectInfo(0, "RENDER_CHANNELS", 2, true)
+    reaper.GetSetProjectInfo(0, "RENDER_SRATE", 44100, true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_FILE", dir, true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_PATTERN", name, true)
+    reaper.GetSetProjectInfo_String(0, "RENDER_FORMAT", "ZXZhdxgAAA==", true) -- WAV 24-bit
+    reaper.Main_OnCommand(42230, 0) -- render with current settings, auto-close dialog
+  end)
+
+  for _, k in ipairs(RENDER_NUM) do reaper.GetSetProjectInfo(0, k, keep[k], true) end
+  for _, k in ipairs(RENDER_STR) do reaper.GetSetProjectInfo_String(0, k, keep[k], true) end
+  local saved = false
+  if was_clean and H.project_file() ~= "" then reaper.Main_SaveProject(0, false); saved = true end
+  if not ok then error(err, 2) end
+
   local f = io.open(path, "rb")
   local size = f and f:seek("end") or 0
   if f then f:close() end
   if size == 0 then error("render produced no file: " .. path, 2) end
-  return { path = path, size = size, seconds = round(t1 - t0, 3), replaced = replaced }
+  return { path = path, size = size, seconds = round(t1 - t0, 3), replaced = replaced, saved_project = saved }
 end
 
 -- project snapshot; o.notes = true includes every note, o.sends = true includes sends

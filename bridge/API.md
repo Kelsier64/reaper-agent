@@ -80,7 +80,7 @@ Track volume/pan envelopes aren't wrapped: put `JS: Volume/Pan Adjustment (Cocko
 | `H.dump({notes, sends})` | snapshot: tempo, timesig, tracks (vol, pan, mute, solo, master_send, fx, items), regions, markers |
 | `H.project_file()`, `H.project_dir()` | |
 | `H.save()` | saves to the project's own file; errors on a never-saved project (a Save As dialog would block the bridge) |
-| `H.render(name, {start_bar, end_bar, tail, dir})` | master → `<project>/renders/<name>.wav`, 24-bit 44.1 kHz; replaces an existing file; returns `{path, size, seconds, replaced}` |
+| `H.render(name, {start_bar, end_bar, tail, dir})` | master → `<project>/renders/<name>.wav`, 24-bit 44.1 kHz; replaces an existing file; restores the project's own render settings afterwards and re-saves a project that was clean before (so it stays clean; unsaved changes are never saved for you); returns `{path, size, seconds, replaced, saved_project}` |
 
 ## Things that block the bridge (avoid)
 Anything that opens a modal dialog: Save As on an unsaved project, quitting/closing a dirty project,
