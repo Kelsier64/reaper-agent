@@ -60,3 +60,12 @@ Known: the tail is still ~1.5 dB left-heavy (the reverb tail is not panned with 
 Lessons (bridge):
 - FX envelopes store *native* values, not normalized → use `H.automate_display`.
 - REAPER silently skips a render if the file exists → the render script deletes it first.
+
+## 2026-11-18: Distance track restored
+- The project saved at 12:01 had lost the **Distance** track (nothing else changed). Since Loudspeaker only sends to
+  Distance, the dry melody/accomp/bell never reached the master; only the echo and reverb returns were audible.
+  Cause unknown: it was already gone (project `[modified]`) before any agent command that day, so most likely a manual delete.
+- Restored with `cmds/17_restore_distance.lua`: the track chunk copied verbatim from the previous commit
+  (ReaEQ + Volume/Pan, 3 envelopes × 8 points, receive from Loudspeaker), inserted back as track 5.
+- Check render (not kept): peak -0.1 dBFS, RMS -16.7 dBFS; timeline -23 → -12 (B, side/mid -10) → -26 dB again,
+  within ~1 dB of v2, i.e. the truck movement is back. Bands within 0.7 dB of v2.
