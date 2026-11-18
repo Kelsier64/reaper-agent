@@ -4,7 +4,7 @@ Claude drives REAPER through a Lua bridge; you can edit anything by hand in betw
 
 ## Bridge
 
-How to operate it: see `AGENTS.md` (agent rules), `.agents/skills/` (workflows), `bridge/API.md` (helpers), `ISSUES.md` (known problems).
+How to operate it: see `AGENTS.md` (agent rules), `skills/` (portable skills, built with `tools/build-skills.mjs`), `bridge/API.md` (helpers), `ISSUES.md` (known problems).
 Commands sent so far: `cmds/` (numbered; `cmds/cli/` for code sent from stdin; `cmds/mcp/` was the old MCP server, now on the `mcp-backup` branch). cmds 00-15 predate bridge v2,
 so they use the old client path, but the helpers they call still exist.
 

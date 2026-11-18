@@ -85,4 +85,4 @@ Track volume/pan envelopes aren't wrapped: put `JS: Volume/Pan Adjustment (Cocko
 ## Things that block the bridge (avoid)
 Anything that opens a modal dialog: Save As on an unsaved project, quitting/closing a dirty project,
 some render settings, plugin error popups. While a dialog is open the bridge doesn't tick:
-`tools\bridge.ps1 status` lists the dialog titles. Ask the user to close them.
+`node reaper.mjs status` lists the dialog titles. Ask the user to close them.

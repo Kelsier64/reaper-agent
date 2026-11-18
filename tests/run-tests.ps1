@@ -14,10 +14,10 @@ $lines = New-Object System.Collections.Generic.List[string]
 function Invoke-Pwsh([string[]]$a) { (& powershell.exe -NoProfile -ExecutionPolicy Bypass @a) }
 
 $st = (Invoke-Pwsh @('-File', (Join-Path $root 'tools\bridge.ps1'), 'status')) -join '' | ConvertFrom-Json
-$needBridge = @($Only | Where-Object { $_ -notin @('analyze', 'skills') }).Count -gt 0
+$needBridge = @($Only | Where-Object { $_ -ne 'analyze' }).Count -gt 0
 if ($needBridge -and $st.bridge -ne 'running') {
   $lines.Add("FAIL setup: bridge is '$($st.bridge)' ($($st.hint)) dialogs: $($st.dialogs -join '; ')")
-  $Only = @($Only | Where-Object { $_ -in @('analyze', 'skills') })
+  $Only = @($Only | Where-Object { $_ -eq 'analyze' })
 }
 
 if ($Only -contains 'analyze') { (Invoke-Pwsh @('-File', (Join-Path $tests 'test_analyze.ps1'))) | ForEach-Object { $lines.Add($_) } }

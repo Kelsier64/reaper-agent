@@ -64,8 +64,8 @@ function Get-State {
     hint = switch ($bridge) {
       'running' { 'ok' }
       'blocked' { 'bridge is not ticking: REAPER is busy or shows a modal dialog (see dialogs). Ask the user to close it; do not restart.' }
-      'stopped' { 'run: tools\bridge.ps1 start' }
-      default { 'run: tools\bridge.ps1 start (launches REAPER)' }
+      'stopped' { 'run: node reaper.mjs start' }
+      default { 'run: node reaper.mjs start (launches REAPER)' }
     }
   }
 }
@@ -96,7 +96,7 @@ function Emit($st, [string]$note) {
 
 $st = Get-State
 if ($Action -eq 'status') { Emit $st }
-if (-not $st.installed) { Emit $st 'bridge not installed: run tools\install.ps1' }
+if (-not $st.installed) { Emit $st 'bridge not installed: run node reaper.mjs install' }
 $exe = Find-Reaper
 if (-not $exe) { Emit $st 'REAPER not found' }
 

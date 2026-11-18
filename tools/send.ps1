@@ -35,8 +35,8 @@ function HeartbeatAge {
 if (-not $File) { Fail 'usage: send.ps1 -File <code.lua> [-Label text] [-ReadOnly]' 1 }
 if (-not (Test-Path $File)) { Fail "file not found: $File" 1 }
 $code = [IO.File]::ReadAllText((Resolve-Path $File).Path, $enc)
-if (-not (Test-Path (Split-Path $req))) { Fail 'bridge not installed: run tools\install.ps1' 2 }
-if (-not (Test-Path $hb)) { Fail 'bridge not running: run tools\bridge.ps1 start' 2 }
+if (-not (Test-Path (Split-Path $req))) { Fail 'bridge not installed: run node reaper.mjs install' 2 }
+if (-not (Test-Path $hb)) { Fail 'bridge not running: run node reaper.mjs start' 2 }
 $Label = ($Label -replace '[\r\n]', ' ')
 
 # ---- acquire lock
@@ -73,7 +73,7 @@ try {
   $w = [Diagnostics.Stopwatch]::StartNew()
   while ((HeartbeatAge) -gt 10 -and $w.Elapsed.TotalSeconds -lt 15) { Start-Sleep -Milliseconds 200 }
   if ((HeartbeatAge) -gt 10) {
-    $out = '{"ok":false,"error":"bridge not responding (stale heartbeat). REAPER may show a modal dialog: run tools\\bridge.ps1 status"}'
+    $out = '{"ok":false,"error":"bridge not responding (stale heartbeat). REAPER may show a modal dialog: run node reaper.mjs status"}'
     $rc = 2
   } else {
     $id = [guid]::NewGuid().ToString('N').Substring(0, 12)
@@ -99,7 +99,7 @@ try {
       Start-Sleep -Milliseconds 30
     }
     if ($null -eq $out) {
-      $out = '{"ok":false,"error":"timeout waiting for REAPER (long operation or a modal dialog: run tools\\bridge.ps1 status)"}'
+      $out = '{"ok":false,"error":"timeout waiting for REAPER (long operation or a modal dialog: run node reaper.mjs status)"}'
       $rc = 3
     }
   }

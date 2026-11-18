@@ -16,3 +16,6 @@ desktop.ini
 .DS_Store
 .vscode/
 node_modules/
+
+# built portable skills (node tools/build-skills.mjs)
+dist/
